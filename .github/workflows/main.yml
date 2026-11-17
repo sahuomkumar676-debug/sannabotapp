@@ -1,0 +1,68 @@
+
+name: Build Sanna Android APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create local configuration
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PICOVOICE_ACCESS_KEY: ${{ secrets.PICOVOICE_ACCESS_KEY }}
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const c = {
+            openAIApiKey: process.env.OPENAI_API_KEY || '',
+            claudeApiKey: '',
+            selectedProvider: 'openai',
+            spotifyClientId: '',
+            googleWebClientId: '',
+            picovoiceAccessKey: process.env.PICOVOICE_ACCESS_KEY || '',
+            slackClientId: '',
+            slackRedirectUrl: ''
+          };
+          const source =
+            "const LOCAL_DEV_CONFIG = " +
+            JSON.stringify(c, null, 2) +
+            ";\nexport default LOCAL_DEV_CONFIG;\n";
+          fs.writeFileSync('local.config.ts', source);
+          NODE
+
+      - name: Build APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sanna-Android-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          
